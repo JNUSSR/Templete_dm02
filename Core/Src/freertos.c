@@ -26,7 +26,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
-#include "4_Task/DJI_Motor_task.h"
+#include "4_Task/DJI_Motor_task/DJI_Motor_task.h"
 
 /* USER CODE END Includes */
 
