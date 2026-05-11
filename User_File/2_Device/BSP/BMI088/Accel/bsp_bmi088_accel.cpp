@@ -19,8 +19,8 @@
 
 /* Private variables ---------------------------------------------------------*/
 
-// 合肥当地重力加速度
-const float GRAVITY_ACCELERATION = 9.7947f;
+// 广州当地重力加速度
+const float GRAVITY_ACCELERATION = 9.788f;
 
 /* Private function declarations ---------------------------------------------*/
 
