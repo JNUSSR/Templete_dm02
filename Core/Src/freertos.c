@@ -53,7 +53,7 @@
 osThreadId_t DJI_Motor_TaskHandle;
 const osThreadAttr_t DJI_Motor_Task_attributes = {
   .name = "DJI_Motor_Task",
-  .stack_size = 512 * 4,
+  .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
 
@@ -64,6 +64,7 @@ const osThreadAttr_t DJI_Motor_Task_attributes = {
 
 void StartDJIMotorTask(void *argument);
 
+extern void MX_USB_DEVICE_Init(void);
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
 /**
@@ -98,7 +99,6 @@ void MX_FREERTOS_Init(void) {
   /* creation of DJI_Motor_Task */
   DJI_Motor_TaskHandle = osThreadNew(StartDJIMotorTask, NULL, &DJI_Motor_Task_attributes);
 
-
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
@@ -118,6 +118,8 @@ void MX_FREERTOS_Init(void) {
 /* USER CODE END Header_StartDJIMotorTask */
 void StartDJIMotorTask(void *argument)
 {
+  /* init code for USB_DEVICE */
+  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN StartDJIMotorTask */
   DJI_M3508_Task(argument);
   /* Infinite loop */
