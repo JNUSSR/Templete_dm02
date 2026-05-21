@@ -27,6 +27,18 @@ uint8_t DM_Motor_CAN_Message_Enter[8] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xf
 uint8_t DM_Motor_CAN_Message_Exit[8] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfd};
 // 保存当前电机位置为零点, 传统模式有效
 uint8_t DM_Motor_CAN_Message_Save_Zero[8] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe};
+// 将控制模式切换为MIT模式, 传统模式有效
+uint8_t DM_Motor_CAN_Message_Mode_MIT[8] =         {0x00, 0x00, 0x55, 0x0A, 0x01, 0x00, 0x00, 0x00};
+// 将控制模式切换为位置速度模式, 传统模式有效
+uint8_t DM_Motor_CAN_Message_Mode_ANGLE_OMEGA[8] = {0x00, 0x00, 0x55, 0x0A, 0x02, 0x00, 0x00, 0x00};
+// 将控制模式切换为速度模式, 传统模式有效
+uint8_t DM_Motor_CAN_Message_Mode_OMEGA[8] =       {0x00, 0x00, 0x55, 0x0A, 0x03, 0x00, 0x00, 0x00};
+// 设置电机的位置映射范围, 传统模式有效
+uint8_t DM_Motor_CAN_Message_Set_Position_Range[8] = {0x00, 0x00, 0x55, 0x15, 0x00, 0x00, 0x00, 0x00};
+// 设置电机的速度映射范围, 传统模式有效
+uint8_t DM_Motor_CAN_Message_Set_Omega_Range[8] = {0x00, 0x00, 0x55, 0x16, 0x00, 0x00, 0x00, 0x00};
+// 设置电机的转矩映射范围, 传统模式有效
+uint8_t DM_Motor_CAN_Message_Set_Torque_Range[8] = {0x00, 0x00, 0x55, 0x17, 0x00, 0x00, 0x00, 0x00};
 
 /* Private function declarations ---------------------------------------------*/
 
@@ -239,21 +251,25 @@ void Class_Motor_DM_Normal::Init(const FDCAN_HandleTypeDef *hcan, const uint8_t 
         CAN_Manage_Object = &CAN3_Manage_Object;
     }
     CAN_Rx_ID = __CAN_Rx_ID;
+    Motor_DM_Control_Method = __Motor_DM_Control_Method;
     switch (__Motor_DM_Control_Method)
     {
     case (Motor_DM_Control_Method_NORMAL_MIT):
     {
         CAN_Tx_ID = __CAN_Tx_ID;
+        Mode_Switch(Motor_DM_Control_Method_NORMAL_MIT);
         break;
     }
     case (Motor_DM_Control_Method_NORMAL_ANGLE_OMEGA):
     {
         CAN_Tx_ID = __CAN_Tx_ID + 0x100;
+        Mode_Switch(Motor_DM_Control_Method_NORMAL_ANGLE_OMEGA);
         break;
     }
     case (Motor_DM_Control_Method_NORMAL_OMEGA):
     {
         CAN_Tx_ID = __CAN_Tx_ID + 0x200;
+        Mode_Switch(Motor_DM_Control_Method_NORMAL_OMEGA);
         break;
     }
     case (Motor_DM_Control_Method_NORMAL_EMIT):
@@ -262,11 +278,37 @@ void Class_Motor_DM_Normal::Init(const FDCAN_HandleTypeDef *hcan, const uint8_t 
         break;
     }
     }
-    Motor_DM_Control_Method = __Motor_DM_Control_Method;
+    
     Angle_Max = __Angle_Max;
     Omega_Max = __Omega_Max;
     Torque_Max = __Torque_Max;
     Current_Max = __Current_Max;
+
+    uint8_t tmp[4];
+    memcpy(tmp, &__Angle_Max, 4);
+    DM_Motor_CAN_Message_Set_Position_Range[4] = tmp[0];
+    DM_Motor_CAN_Message_Set_Position_Range[5] = tmp[1];
+    DM_Motor_CAN_Message_Set_Position_Range[6] = tmp[2];
+    DM_Motor_CAN_Message_Set_Position_Range[7] = tmp[3];
+    Send_Write_CAN_Message(DM_Motor_CAN_Message_Set_Position_Range);
+
+    memcpy(tmp, &__Omega_Max, 4);
+    DM_Motor_CAN_Message_Set_Omega_Range[4] = tmp[0];
+    DM_Motor_CAN_Message_Set_Omega_Range[5] = tmp[1];
+    DM_Motor_CAN_Message_Set_Omega_Range[6] = tmp[2];
+    DM_Motor_CAN_Message_Set_Omega_Range[7] = tmp[3];
+    Send_Write_CAN_Message(DM_Motor_CAN_Message_Set_Omega_Range);
+
+    memcpy(tmp, &__Torque_Max, 4);
+    DM_Motor_CAN_Message_Set_Torque_Range[4] = tmp[0];
+    DM_Motor_CAN_Message_Set_Torque_Range[5] = tmp[1];
+    DM_Motor_CAN_Message_Set_Torque_Range[6] = tmp[2];
+    DM_Motor_CAN_Message_Set_Torque_Range[7] = tmp[3];
+    Send_Write_CAN_Message(DM_Motor_CAN_Message_Set_Torque_Range);
+
+    Save_Parameters_CAN_CMD();
+
+    HAL_Delay(100);
 }
 
 /**
@@ -363,17 +405,17 @@ void Class_Motor_DM_Normal::TIM_Send_PeriodElapsedCallback()
     }
     else
     {
-        if (Rx_Data.Control_Status == Motor_DM_Control_Status_DISABLE)
-        {
-            // 电机可能掉线, 使能电机
-            CAN_Send_Enter();
-        }
-        else
-        {
-            // 电机错误, 发送清除错误帧, 使能电机
-            CAN_Send_Clear_Error();
-            CAN_Send_Enter();
-        }
+        // if (Rx_Data.Control_Status == Motor_DM_Control_Status_DISABLE)
+        // {
+        //     // 电机可能掉线, 使能电机
+        //     CAN_Send_Enter();
+        // }
+        // else
+        // {
+        //     // 电机错误, 发送清除错误帧, 使能电机
+        //     CAN_Send_Clear_Error();
+        //     CAN_Send_Enter();
+        // }
     }
 }
 
@@ -406,6 +448,160 @@ void Class_Motor_DM_Normal::Data_Process()
     Rx_Data.Now_Torque = Basic_Math_Int_To_Float(tmp_torque, 0x7ff, (1 << 12) - 1, 0, Torque_Max);
     Rx_Data.Now_MOS_Temperature = tmp_buffer->MOS_Temperature + BASIC_MATH_CELSIUS_TO_KELVIN;
     Rx_Data.Now_Rotor_Temperature = tmp_buffer->Rotor_Temperature + BASIC_MATH_CELSIUS_TO_KELVIN;
+}
+
+/**
+ * @brief 传统控制模式切换
+ *
+ */
+void Class_Motor_DM_Normal::Mode_Switch(const Enum_Motor_DM_Control_Method &__Motor_DM_Control_Method)
+{
+    uint16_t temp_canid = 0;
+    temp_canid = CAN_Tx_ID;
+    switch (Motor_DM_Control_Method)
+    {
+        case(Motor_DM_Control_Method_NORMAL_MIT):
+        {
+            temp_canid = CAN_Tx_ID;
+            break;
+        }
+        case(Motor_DM_Control_Method_NORMAL_ANGLE_OMEGA):
+        {
+            temp_canid = CAN_Tx_ID - 0x100;
+            break;
+        }
+        case(Motor_DM_Control_Method_NORMAL_OMEGA):
+        {
+            temp_canid = CAN_Tx_ID - 0x200;
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+    CAN_Transmit_Data(CAN_Manage_Object->CAN_Handler, CAN_Tx_ID, DM_Motor_CAN_Message_Exit, 8);
+    Motor_DM_Control_Method = __Motor_DM_Control_Method;
+    switch (Motor_DM_Control_Method)
+    {    
+        case(Motor_DM_Control_Method_NORMAL_MIT):
+        {
+            //看看是原始ID还是加上偏移量，如果是加上偏移量直接用Tx_ID就行，如果不是就要减去相应偏移量
+            CAN_Tx_ID = temp_canid;
+            DM_Motor_CAN_Message_Mode_MIT[0] = (uint8_t)(temp_canid & 0xFF);
+            DM_Motor_CAN_Message_Mode_MIT[1] = (uint8_t)((temp_canid >> 8) & 0xFF);
+            CAN_Transmit_Data(CAN_Manage_Object->CAN_Handler, 0x7FF, DM_Motor_CAN_Message_Mode_MIT, 8);
+            break;
+        }
+        case(Motor_DM_Control_Method_NORMAL_ANGLE_OMEGA):
+        {
+            CAN_Tx_ID = temp_canid + 0x100;
+            DM_Motor_CAN_Message_Mode_ANGLE_OMEGA[0] = (uint8_t)(temp_canid & 0xFF);
+            DM_Motor_CAN_Message_Mode_ANGLE_OMEGA[1] = (uint8_t)((temp_canid >> 8) & 0xFF);
+            CAN_Transmit_Data(CAN_Manage_Object->CAN_Handler, 0x7FF, DM_Motor_CAN_Message_Mode_ANGLE_OMEGA, 8);
+            break;
+        }
+        case(Motor_DM_Control_Method_NORMAL_OMEGA):
+        {
+            CAN_Tx_ID = temp_canid + 0x200;
+            DM_Motor_CAN_Message_Mode_OMEGA[0] = (uint8_t)(temp_canid & 0xFF);
+            DM_Motor_CAN_Message_Mode_OMEGA[1] = (uint8_t)((temp_canid >> 8) & 0xFF);
+            CAN_Transmit_Data(CAN_Manage_Object->CAN_Handler, 0x7FF, DM_Motor_CAN_Message_Mode_OMEGA, 8);
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+    CAN_Transmit_Data(CAN_Manage_Object->CAN_Handler, CAN_Tx_ID, DM_Motor_CAN_Message_Enter, 8);
+}
+
+/**
+ * @brief 向电机电调写参数
+ *
+ * @param message 要写入的参数报文数据段, 一共8字节
+ * @note 一般在本文件开始定义的全局变量中的数组基础上修改
+ */
+void Class_Motor_DM_Normal::Send_Write_CAN_Message(uint8_t * message)
+{
+    uint16_t temp_canid = CAN_Tx_ID;
+    switch (Motor_DM_Control_Method)
+    {
+        case(Motor_DM_Control_Method_NORMAL_MIT):
+        {
+            temp_canid = CAN_Tx_ID;
+        }
+        case(Motor_DM_Control_Method_NORMAL_ANGLE_OMEGA):
+        {
+            temp_canid = CAN_Tx_ID - 0x100;
+        }
+        case(Motor_DM_Control_Method_NORMAL_OMEGA):
+        {
+            temp_canid = CAN_Tx_ID - 0x200;
+        }
+        default:
+        {
+            break;
+        }
+    }
+    uint8_t tmp_message[8] = {0};
+
+    memcpy(tmp_message, message, 8);
+    
+    CAN_Transmit_Data(CAN_Manage_Object->CAN_Handler, CAN_Tx_ID, DM_Motor_CAN_Message_Exit, 8);
+    //看看是原始ID还是加上偏移量，如果是加上偏移量直接用Tx_ID就行，如果不是就要减去相应偏移量
+    tmp_message[0] = (uint8_t)(temp_canid & 0xFF);
+    tmp_message[1] = (uint8_t)((temp_canid >> 8) & 0xFF);
+    CAN_Transmit_Data(CAN_Manage_Object->CAN_Handler, 0x7FF, tmp_message, 8);
+    CAN_Transmit_Data(CAN_Manage_Object->CAN_Handler, CAN_Tx_ID, DM_Motor_CAN_Message_Enter, 8);
+
+        
+}
+
+/**
+ * @brief 保存电调当前参数
+ *
+ * @param message 要写入的参数报文数据段, 一共8字节
+ * @note 一般在本文件开始定义的全局变量中的数组基础上修改
+ */
+void Class_Motor_DM_Normal::Save_Parameters_CAN_CMD()
+{
+    uint16_t temp_canid = CAN_Tx_ID;
+    switch (Motor_DM_Control_Method)
+    {
+        case(Motor_DM_Control_Method_NORMAL_MIT):
+        {
+            temp_canid = CAN_Tx_ID;
+        }
+        case(Motor_DM_Control_Method_NORMAL_ANGLE_OMEGA):
+        {
+            temp_canid = CAN_Tx_ID - 0x100;
+        }
+        case(Motor_DM_Control_Method_NORMAL_OMEGA):
+        {
+            temp_canid = CAN_Tx_ID - 0x200;
+        }
+        default:
+        {
+            break;
+        }
+    }
+
+    CAN_Transmit_Data(CAN_Manage_Object->CAN_Handler, CAN_Tx_ID, DM_Motor_CAN_Message_Exit, 8);
+
+    HAL_Delay(10);
+
+    uint8_t save_cmd[4] = {0};
+    save_cmd[0] = (uint8_t)(temp_canid & 0xFF);
+    save_cmd[1] = (uint8_t)((temp_canid >> 8) & 0xFF);
+    save_cmd[2] = 0xAA;
+    save_cmd[3] = 0x00;//可以为任意数
+    CAN_Transmit_Data(CAN_Manage_Object->CAN_Handler, 0x7FF, save_cmd, 4);
+
+    HAL_Delay(50);
+
+    CAN_Transmit_Data(CAN_Manage_Object->CAN_Handler, CAN_Tx_ID, DM_Motor_CAN_Message_Enter, 8);
 }
 
 /**

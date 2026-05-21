@@ -48,6 +48,7 @@ enum Enum_Motor_DM_Motor_ID_1_To_4 : uint8_t
     Motor_DM_ID_0x308,
 };
 
+
 /**
  * @brief 达妙电机控制状态, 传统模式有效
  *
@@ -246,6 +247,12 @@ public:
     inline void Set_K_P(const float &__K_P);
 
     inline void Set_K_D(const float &__K_D);
+
+    void Mode_Switch(const Enum_Motor_DM_Control_Method &__Motor_DM_Control_Method);
+
+    void Send_Write_CAN_Message(uint8_t * message);
+
+    void Save_Parameters_CAN_CMD();
 
     void CAN_RxCpltCallback();
 
